@@ -189,7 +189,7 @@ class ProductVariantInventoryService extends TransactionBaseService {
    * @param variantId variant id
    * @returns variant inventory items for the variant id
    */
-  private async listByVariant(
+  public async listByVariant(
     variantId: string | string[]
   ): Promise<ProductVariantInventoryItem[]> {
     const manager = this.transactionManager_ || this.manager_
