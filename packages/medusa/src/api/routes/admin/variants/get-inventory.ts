@@ -4,6 +4,7 @@ import {
 } from "../../../../types/inventory"
 import ProductVariantInventoryService from "../../../../services/product-variant-inventory"
 import {
+  SalesChannelInventoryService,
   SalesChannelLocationService,
   SalesChannelService,
 } from "../../../../services"
@@ -73,6 +74,8 @@ export default async (req, res) => {
   const channelLocationService: SalesChannelLocationService = req.scope.resolve(
     "salesChannelLocationService"
   )
+  const salesChannelInventoryService: SalesChannelInventoryService =
+    req.scope.resolve("salesChannelInventoryService")
   const channelService: SalesChannelService = req.scope.resolve(
     "salesChannelService"
   )
@@ -102,6 +105,9 @@ export default async (req, res) => {
     })
   )
 
+  const variantInventoryItems =
+    await productVariantInventoryService.listByVariant(variant.id)
+
   const inventory =
     await productVariantInventoryService.listInventoryItemsByVariant(variant.id)
   responseVariant.inventory = await joinLevels(inventory, [], inventoryService)
@@ -117,11 +123,19 @@ export default async (req, res) => {
           }
         }
 
-        const [{ inventory_quantity }] =
-          await productVariantInventoryService.setVariantAvailability(
-            [variant],
-            channel.id
-          )
+        const inventory_quantity = Math.min(
+          ...(await Promise.all(
+            variantInventoryItems.map(async (variantInventory) => {
+              return (
+                // eslint-disable-next-line max-len
+                (await salesChannelInventoryService.retrieveAvailableItemQuantity(
+                  channel.id,
+                  variantInventory.inventory_item_id
+                )) / variantInventory.required_quantity
+              )
+            })
+          ))
+        )
 
         return {
           channel_name: channel.name as string,
