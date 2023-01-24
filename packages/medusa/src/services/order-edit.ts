@@ -7,13 +7,13 @@ import {
   Order,
   OrderEdit,
   OrderEditItemChangeType,
-  OrderEditStatus
+  OrderEditStatus,
 } from "../models"
 import { OrderEditRepository } from "../repositories/order-edit"
 import { FindConfig, Selector } from "../types/common"
 import {
   AddOrderEditLineItemInput,
-  CreateOrderEditInput
+  CreateOrderEditInput,
 } from "../types/order-edit"
 import { buildQuery, isString } from "../utils"
 import {
@@ -23,7 +23,7 @@ import {
   OrderEditItemChangeService,
   OrderService,
   TaxProviderService,
-  TotalsService
+  TotalsService,
 } from "./index"
 
 type InjectedDependencies = {
@@ -433,7 +433,9 @@ export default class OrderEditService extends TransactionBaseService {
           quantity: data.quantity,
         })
 
-      await this.refreshAdjustments(orderEditId)
+      await this.refreshAdjustments(orderEditId, {
+        preserveCustomAdjustments: true,
+      })
     })
   }
 
@@ -494,7 +496,10 @@ export default class OrderEditService extends TransactionBaseService {
     })
   }
 
-  async refreshAdjustments(orderEditId: string) {
+  async refreshAdjustments(
+    orderEditId: string,
+    config = { preserveCustomAdjustments: false }
+  ) {
     const manager = this.transactionManager_ ?? this.manager_
 
     const lineItemAdjustmentServiceTx =
@@ -521,7 +526,11 @@ export default class OrderEditService extends TransactionBaseService {
     orderEdit.items.forEach((item) => {
       if (item.adjustments?.length) {
         item.adjustments.forEach((adjustment) => {
-          clonedItemAdjustmentIds.push(adjustment.id)
+          if (
+            config.preserveCustomAdjustments ? !!adjustment.discount_id : true
+          ) {
+            clonedItemAdjustmentIds.push(adjustment.id)
+          }
         })
       }
     })
@@ -589,7 +598,9 @@ export default class OrderEditService extends TransactionBaseService {
       let lineItem = await lineItemServiceTx.create(lineItemData)
       lineItem = await lineItemServiceTx.retrieve(lineItem.id)
 
-      await this.refreshAdjustments(orderEditId)
+      await this.refreshAdjustments(orderEditId, {
+        preserveCustomAdjustments: true,
+      })
 
       /**
        * Generate a change record
