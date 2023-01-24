@@ -1,7 +1,5 @@
 const path = require("path")
 
-const startServerWithEnvironment =
-  require("../../../helpers/start-server-with-environment").default
 const { useApi } = require("../../../helpers/use-api")
 const { useDb, initDb } = require("../../../helpers/use-db")
 const adminSeeder = require("../../helpers/admin-seeder")
@@ -39,9 +37,7 @@ describe("/admin/order-edits", () => {
   beforeAll(async () => {
     const cwd = path.resolve(path.join(__dirname, "..", ".."))
     dbConnection = await initDb({ cwd })
-    medusaProcess = await setupServer({
-      cwd,
-    })
+    medusaProcess = await setupServer({ cwd })
   })
 
   afterAll(async () => {
@@ -1143,7 +1139,6 @@ describe("/admin/order-edits", () => {
   describe("POST /admin/order-edits/:id/items", () => {
     const orderEditId = IdMap.getId("order-edit-1")
     const prodId1 = IdMap.getId("prodId1")
-    const lineItemId1 = IdMap.getId("line-item-1")
     const orderId1 = IdMap.getId("order-id-1")
     const toBeAddedVariantId = IdMap.getId("variant id")
 
@@ -2852,6 +2847,60 @@ describe("/admin/order-edits", () => {
           subtotal: 2 * 1000,
           tax_total: (2000 - 200) * 0.125,
           total: 1800 * 0.125 + 1800,
+        })
+      )
+    })
+
+    it("copies custom line item adjustment", async () => {
+      const api = useApi()
+
+      const response = await api.post(
+        `/admin/order-edits/${orderEditId}/items`,
+        { variant_id: toBeAddedVariantId, quantity: 2 },
+        adminHeaders
+      )
+
+      expect(response.status).toEqual(200)
+      expect(response.data.order_edit).toEqual(
+        expect.objectContaining({
+          id: orderEditId,
+          created_by: "admin_user",
+          requested_by: null,
+          canceled_by: null,
+          confirmed_by: null,
+          // "Add item" change has been created
+          changes: [
+            expect.objectContaining({
+              type: "item_add",
+              order_edit_id: orderEditId,
+              original_line_item_id: null,
+              line_item_id: expect.any(String),
+            }),
+          ],
+          items: expect.arrayContaining([
+            expect.objectContaining({
+              variant: expect.objectContaining({ id: toBeAddedVariantId }),
+              quantity: 2,
+              order_id: null, // <-- NOT associated with the order at this point
+              tax_lines: [
+                expect.objectContaining({
+                  rate: 12.5,
+                  name: "default",
+                  code: "default",
+                }),
+              ],
+            }),
+          ]),
+          /*
+           * Computed totals are appended to the response
+           */
+          discount_total: 0,
+          gift_card_total: 0,
+          gift_card_tax_total: 0,
+          shipping_total: 0,
+          subtotal: 2 * 200,
+          tax_total: 0.125 * 2 * 200,
+          total: 400 + 50,
         })
       )
     })
